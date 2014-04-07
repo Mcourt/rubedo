@@ -828,6 +828,14 @@ class DataAccess implements IDataAccess
     }
 
     /**
+     * Rapid simple creation using fire and forget
+     */
+    public function directCreate($obj)
+    {
+        $this->_collection->insert($obj, array("w"=>0));
+    }
+
+    /**
      * Update an objet in the current collection
      *
      * @see \Rubedo\Interfaces\IDataAccess::update

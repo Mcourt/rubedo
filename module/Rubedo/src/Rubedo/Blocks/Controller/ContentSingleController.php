@@ -47,9 +47,12 @@ class ContentSingleController extends AbstractController
         
         if (isset($mongoId) && $mongoId != 0) {
             $content = $this->_dataReader->findById($mongoId, true, false);
+
             if (! $content) {
                 return $this->_sendResponse(array(), "block.html.twig");
             }
+            $currentTime=Manager::getService("CurrentTime")->getCurrentTime();
+            Manager::getService("ContentViewLog")->log($content['id'], $content['locale'], $_SERVER['REMOTE_ADDR'], $currentTime);
             $data = $content['fields'];
             $termsArray = array();
             if (isset($content['taxonomy'])) {
