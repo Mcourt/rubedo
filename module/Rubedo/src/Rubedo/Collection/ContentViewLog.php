@@ -16,6 +16,8 @@
  */
 namespace Rubedo\Collection;
 
+use Rubedo\Mongo\DataAccess;
+
 /**
  * Service to handle content view logging
  *
@@ -32,6 +34,10 @@ class ContentViewLog extends AbstractCollection
         parent::__construct();
     }
 
+    public function init () {
+    	
+    }
+    
     public function log ($contentId, $locale, $ip, $timestamp){
         $this->_dataService->directCreate(array(
             "contentId"=>$contentId,
@@ -39,6 +45,116 @@ class ContentViewLog extends AbstractCollection
             "userIP"=>$ip,
             "timestamp"=>$timestamp
         ));
+    }
+    
+    public function processLog() {
+    	
+    	$mapCode =	"
+	    	function() {
+				var content = this;
+				if (content.live) {
+					if (content.live.taxonomy){
+						for (var vocabulary in content.live.taxonomy) {	
+							if ((content.live.taxonomy.hasOwnProperty(vocabulary)) && (typeof content.live.taxonomy[vocabulary] != 'string')) {
+								content.live.taxonomy[vocabulary].forEach (function(term) {
+    								if (term>'') {
+										value = {};
+										value[content._id.valueOf()]=1;
+										emit(term, value);	
+    								}
+								});
+							}
+						}
+					}
+				}
+			};";
+    	
+		$reduceCode = "
+			function(key, values) {
+				var result = {};
+				values.forEach( function(element) {
+					key = Object.keys(element)[0];
+					result[key] = 1;
+				});
+				return result;
+			}";
+		
+		$params = array(
+				"mapreduce" => "Contents", // collection
+				"map" => new \MongoCode($mapCode), // map
+				"reduce" => new \MongoCode($reduceCode), // reduce
+				"out" => array("replace" => "tmpRecommendation") // out
+		);
+		
+		$response = $this->_dataService->command($params);		
+		
+		$mapCode =	"
+			function() {
+				var term = this; 
+				var ids = Object.keys(term.value); 
+				if (ids.length>1) {
+					for (var i=0; i < ids.length; i++) {
+						for (var j=i+1; j < ids.length; j++) {
+							value = {}; 
+							value[ids[j]]=1; 
+							emit(ids[i], value);
+    					}
+    				}
+    			}
+    		}";
+
+		$reduceCode = "
+			function(key, values) {
+				var result = {};
+				values.forEach( function(element) {
+					key = Object.keys(element)[0];
+					if (result[key]) {
+						result[key]=result[key]+1;
+					} else {
+						result[key]=1;
+					}
+				});
+				return result;
+			}";
+
+		$params = array(
+				"mapreduce" => "tmpRecommendation", // collection
+				"map" => new \MongoCode($mapCode), // map
+				"reduce" => new \MongoCode($reduceCode), // reduce
+				"out" => array("replace" => "ItemRecommendation") // out
+		);
+		
+		$response = $this->_dataService->command($params);
+		
+		$code = "
+			db.tmpRecommendation.drop();
+			db.ContentViewLog.find().snapshot().forEach(function(foo) {
+				var v = db.ItemRecommendation.findOne({_id:foo.contentId});
+				if (v) {
+					for (var content in v.value) {
+						db.UserRecommendation.update(
+							{ userIP: foo.userIP },
+							{ \$addToSet : {reco: {cid: content, score:  v.value[content]}}},
+							{ upsert: true }
+						);					
+						db.UserRecommendation.update(
+							{ userIP: foo.userIP, reco: { \$elemMatch: { cid: content } } },
+							{ \$inc: {'reco.$.score' : v.value[content]}}
+						);
+						var action = {};
+						action[foo.contentId] = '';
+					}
+					db.ContentViewLog.remove(foo);
+				}
+			});";
+
+		$response = $this->_dataService->execute($code);
+    	
+    	if ($response['ok']!=1) {
+    		throw new \Rubedo\Exceptions\Server(var_dump($response));
+    	}
+    		
+    	return $response;
     }
 
 }
