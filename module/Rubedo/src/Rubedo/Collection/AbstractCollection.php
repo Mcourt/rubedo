@@ -108,7 +108,7 @@ abstract class AbstractCollection implements IAbstractCollection
      *            sort the list with mongo syntax
      * @return array
      */
-    public function getList(\WebTales\MongoFilters\IFilter $filters = null, $sort = null, $start = null, $limit = null)
+    public function getList(\WebTales\MongoFilters\IFilter $filters = null, $sort = null, $start = null, $limit = null, $ismagic = null)
     {
         if (isset($sort)) {
             foreach ($sort as $value) {
@@ -123,7 +123,45 @@ abstract class AbstractCollection implements IAbstractCollection
         if (isset($limit)) {
             $this->_dataService->setNumberOfResults($limit);
         }
+        
+        if (isset($limit)) {
+        	$this->_dataService->setNumberOfResults($limit);
+        }
+               
+        // try to insert magic
+
+        if ($ismagic) {
+
+        	// Read user recommendations
+        	$recList = Manager::getService('UserRecommendations')->getRec();
+        	if ($recList['total']> 0) {
+        	        // recovers the list of recommended contents id
+			        foreach ($recList['data'] as $value) {
+			            $contentsArray[] = $value['id'];
+			        }
+			        // check if recommended contents are returned by original query
+			        $filter = Filter::Factory('InUid',array('value'=>$contentsArray));
+        			$inFilters = Filter::factory();
+        			$inFilters->addFilter($filter);
+        			$inFilters->addFilter($filters);
+        			$recValues = $this->_dataService->read($inFilters);
+        			// if so, remove them from original query
+        			if (count($recValues['data']) > 0) {
+        				// run original query without rec
+        				$ninFilter = Filter::Factory('NotInUid',array('value'=>$contentsArray));
+        				$filters->addFilter($ninFilter);
+        			}
+        	}
+
+        	
+        }
+        
         $dataValues = $this->_dataService->read($filters);
+        
+        if ($ismagic && count($recValues['data']) > 0) {
+        	$dataValues['data'] = array_merge($recValues['data'], $dataValues['data']);
+        }
+        
         if ($dataValues && is_array($dataValues)) {
             foreach ($dataValues['data'] as &$obj) {
                 if (is_array($obj)) {

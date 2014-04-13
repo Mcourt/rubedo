@@ -47,7 +47,7 @@ class ContentViewLog extends AbstractCollection
         ));
     }
     
-    public function processLog() {
+    public function setItemRecommendations() {
     	
     	$mapCode =	"
 	    	function() {
@@ -55,7 +55,9 @@ class ContentViewLog extends AbstractCollection
 				if (content.live) {
 					if (content.live.taxonomy){
 						for (var vocabulary in content.live.taxonomy) {	
-							if ((content.live.taxonomy.hasOwnProperty(vocabulary)) && (typeof content.live.taxonomy[vocabulary] != 'string')) {
+							if ((content.live.taxonomy.hasOwnProperty(vocabulary)) 
+    								&& (typeof content.live.taxonomy[vocabulary] != 'string') 
+    									&& (content.live.taxonomy[vocabulary])) {
 								content.live.taxonomy[vocabulary].forEach (function(term) {
     								if (term>'') {
 										value = {};
@@ -83,11 +85,11 @@ class ContentViewLog extends AbstractCollection
 				"mapreduce" => "Contents", // collection
 				"map" => new \MongoCode($mapCode), // map
 				"reduce" => new \MongoCode($reduceCode), // reduce
-				"out" => array("replace" => "tmpRecommendation") // out
+				"out" => array("replace" => "tmpRecommendations") // out
 		);
 		
 		$response = $this->_dataService->command($params);		
-		
+
 		$mapCode =	"
 			function() {
 				var term = this; 
@@ -118,26 +120,32 @@ class ContentViewLog extends AbstractCollection
 			}";
 
 		$params = array(
-				"mapreduce" => "tmpRecommendation", // collection
+				"mapreduce" => "tmpRecommendations", // collection
 				"map" => new \MongoCode($mapCode), // map
 				"reduce" => new \MongoCode($reduceCode), // reduce
-				"out" => array("replace" => "ItemRecommendation") // out
+				"out" => array("replace" => "ItemRecommendations") // out
 		);
 		
 		$response = $this->_dataService->command($params);
 		
+		return $response;
+		
+    }
+    	
+    public function viewLogPop() {
+    		
 		$code = "
-			db.tmpRecommendation.drop();
+			db.tmpRecommendations.drop();
 			db.ContentViewLog.find().snapshot().forEach(function(foo) {
-				var v = db.ItemRecommendation.findOne({_id:foo.contentId});
+				var v = db.ItemRecommendations.findOne({_id:foo.contentId});
 				if (v) {
 					for (var content in v.value) {
-						db.UserRecommendation.update(
+						db.UserRecommendations.update(
 							{ userIP: foo.userIP },
 							{ \$addToSet : {reco: {cid: content, score:  v.value[content]}}},
 							{ upsert: true }
 						);					
-						db.UserRecommendation.update(
+						db.UserRecommendations.update(
 							{ userIP: foo.userIP, reco: { \$elemMatch: { cid: content } } },
 							{ \$inc: {'reco.$.score' : v.value[content]}}
 						);
@@ -149,10 +157,6 @@ class ContentViewLog extends AbstractCollection
 			});";
 
 		$response = $this->_dataService->execute($code);
-    	
-    	if ($response['ok']!=1) {
-    		throw new \Rubedo\Exceptions\Server(var_dump($response));
-    	}
     		
     	return $response;
     }

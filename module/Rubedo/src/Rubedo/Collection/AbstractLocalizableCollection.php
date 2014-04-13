@@ -136,15 +136,14 @@ abstract class AbstractLocalizableCollection extends AbstractCollection
      *            sort the list with mongo syntax
      * @return array
      */
-    public function getList(\WebTales\MongoFilters\IFilter $filters = null, $sort = null, $start = null, $limit = null)
+    public function getList(\WebTales\MongoFilters\IFilter $filters = null, $sort = null, $start = null, $limit = null, $ismagic = null)
     {
-        $dataValues = parent::getList($filters, $sort, $start, $limit);
+        $dataValues = parent::getList($filters, $sort, $start, $limit, $ismagic);
         if ($dataValues && is_array($dataValues)) {
             foreach ($dataValues['data'] as &$obj) {
                 $obj = $this->localizeOutput($obj);
             }
         }
-
         return $dataValues;
     }
 
