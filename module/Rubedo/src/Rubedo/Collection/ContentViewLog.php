@@ -153,6 +153,7 @@ class ContentViewLog extends AbstractCollection
 						action[foo.contentId] = '';
 					}
 					db.ContentViewLog.remove(foo);
+					db.UserRecommendations.update({ userIP: foo.userIP },{\$pull: { reco: {'cid': foo.ContentId}}});
 				}
 			});";
 
