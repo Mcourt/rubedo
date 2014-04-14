@@ -35,16 +35,11 @@ class UserRecommendations extends AbstractCollection
         $pipeline=array();
         $pipeline[]=array(
             '$match'=>array(
-                'userIP'=> '127.0.0.1'
+                'userIP'=> $_SERVER['REMOTE_ADDR']
             )
         );
         $pipeline[]=array(
             '$unwind'=>'$reco'
-        );
-        $pipeline[]=array(
-            '$sort'=>array(
-                'reco.score'=>-1
-            )
         );
         $pipeline[]=array(
             '$project'=>array(
@@ -52,6 +47,11 @@ class UserRecommendations extends AbstractCollection
             	'id' => '$reco.cid',
             	'score' => '$reco.score'
             )
+        );
+        $pipeline[]=array(
+        		'$sort'=>array(
+        				'score'=>-1
+        		)
         );
         $pipeline[]=array(
             '$limit'=> 20

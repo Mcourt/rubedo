@@ -83,6 +83,8 @@ abstract class AbstractCollection implements IAbstractCollection
     protected static $_fetchedObjects = array();
 
     protected static $_isFrontEnd = false;
+    
+    protected $_recList = array();
 
     protected function _init()
     {
@@ -110,54 +112,76 @@ abstract class AbstractCollection implements IAbstractCollection
      */
     public function getList(\WebTales\MongoFilters\IFilter $filters = null, $sort = null, $start = null, $limit = null, $ismagic = null)
     {
-        if (isset($sort)) {
-            foreach ($sort as $value) {
-                $this->_dataService->addSort(array(
-                    $value["property"] => strtolower($value["direction"])
-                ));
-            }
-        }
-        if (isset($start)) {
-            $this->_dataService->setFirstResult($start);
-        }
-        if (isset($limit)) {
-            $this->_dataService->setNumberOfResults($limit);
-        }
-        
-        if (isset($limit)) {
-        	$this->_dataService->setNumberOfResults($limit);
-        }
-               
+              
         // try to insert magic
 
         if ($ismagic) {
 
         	// Read user recommendations
+        	
         	$recList = Manager::getService('UserRecommendations')->getRec();
+
+        	// If recommendations exists
         	if ($recList['total']> 0) {
+        		
         	        // recovers the list of recommended contents id
 			        foreach ($recList['data'] as $value) {
-			            $contentsArray[] = $value['id'];
+			            $this->_recList[] = $value['id'];
 			        }
-			        // check if recommended contents are returned by original query
-			        $filter = Filter::Factory('InUid',array('value'=>$contentsArray));
+
+			        // Add InUid filter to check if recommended contents are returned by original query
+			        $filter = Filter::Factory('InUid',array('value'=>$this->_recList));
         			$inFilters = Filter::factory();
         			$inFilters->addFilter($filter);
-        			$inFilters->addFilter($filters);
+        			$inFilters->addFilter($filters);     			
+        			
+        			// Get unsorted recommended items
         			$recValues = $this->_dataService->read($inFilters);
-        			// if so, remove them from original query
+
+        			// if there is some recommended items
         			if (count($recValues['data']) > 0) {
-        				// run original query without rec
-        				$ninFilter = Filter::Factory('NotInUid',array('value'=>$contentsArray));
+
+        				// Remove recommended Items from original query
+        				$ninFilter = Filter::Factory('NotInUid',array('value'=>$this->_recList));
         				$filters->addFilter($ninFilter);
+        				$this->_recList = array_flip($this->_recList);
+
+        				// Sort recommended items by score
+        				usort($recValues['data'], function ($c1,$c2) 
+        				{
+        					$key1 = $this->_recList[$c1['id']];
+        					$key2 = $this->_recList[$c2['id']];
+        					
+        					return ($key1 > $key2) ? 1 : -1;
+  
+    					});
         			}
         	}
 
         	
         }
         
-        $dataValues = $this->_dataService->read($filters);
         
+        // Get original results
+
+        if (isset($sort)) {
+        	foreach ($sort as $value) {
+        		$this->_dataService->addSort(array(
+        				$value["property"] => strtolower($value["direction"])
+        		));
+        	}
+        }
+         
+        if (isset($start)) {
+        	$this->_dataService->setFirstResult($start);
+        }
+        if (isset($limit)) {
+        	$this->_dataService->setNumberOfResults($limit);
+        }
+                
+        $dataValues = $this->_dataService->read($filters);
+
+        // Merge results when magic checked
         if ($ismagic && count($recValues['data']) > 0) {
         	$dataValues['data'] = array_merge($recValues['data'], $dataValues['data']);
         }
@@ -817,3 +841,4 @@ abstract class AbstractCollection implements IAbstractCollection
 
 }
 	
+
