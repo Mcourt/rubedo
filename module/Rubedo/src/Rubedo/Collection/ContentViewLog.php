@@ -47,7 +47,7 @@ class ContentViewLog extends AbstractCollection
         ));
     }
     
-    public function setItemRecommendations() {
+    public function buildItemRecommendations() {
     	
     	$mapCode =	"
 	    	function() {

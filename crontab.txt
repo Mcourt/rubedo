@@ -1,0 +1,2 @@
+15 * * * * /usr/bin/wget http://demo.local/queue?service=ContentViewLog&class=viewLogPop
+0 */8 * * * /usr/bin/wget  http://demo.local/queue?service=ContentViewLog&class=buildItemRecommendations
